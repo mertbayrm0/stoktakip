@@ -10,10 +10,12 @@ import {
     Truck,
     ArrowRight,
     Loader2,
+    Camera,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import StatusBadge from "../components/shared/StatusBadge";
+import BarcodeScanner from "../components/shared/BarcodeScanner";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -54,6 +56,7 @@ export default function Dashboard() {
     const [qty, setQty] = useState(1);
     const [scanning, setScanning] = useState(false);
     const [ordering, setOrdering] = useState(false);
+    const [cameraOpen, setCameraOpen] = useState(false);
 
     useEffect(() => {
         api.get("/dashboard/stats").then((r) => setStats(r.data)).catch(() => {});
@@ -69,6 +72,21 @@ export default function Dashboard() {
             setScanResult(data);
             if (!data.found) toast.warning("Ürün kataloğunuzda bulunamadı");
         } catch (e) {
+            toast.error("Arama başarısız");
+        } finally {
+            setScanning(false);
+        }
+    };
+
+    const runScanWith = async (value) => {
+        setQuery(value);
+        setScanning(true);
+        try {
+            const { data } = await api.get("/products/search", { params: { q: value } });
+            setScanResult(data);
+            if (!data.found) toast.warning("Ürün kataloğunuzda bulunamadı");
+            else toast.success(`Barkod okundu: ${value}`);
+        } catch {
             toast.error("Arama başarısız");
         } finally {
             setScanning(false);
@@ -137,6 +155,17 @@ export default function Dashboard() {
                     className="border-0 shadow-none focus-visible:ring-0 h-12 text-base px-0"
                 />
                 <Button
+                    type="button"
+                    data-testid="dashboard-camera-btn"
+                    onClick={() => setCameraOpen(true)}
+                    variant="outline"
+                    className="rounded-xl border-slate-200 h-11 px-4"
+                    title="Kamerayla tara"
+                >
+                    <Camera size={16} />
+                    <span className="ml-2 hidden sm:inline">Kamera</span>
+                </Button>
+                <Button
                     data-testid="dashboard-scan-btn"
                     type="submit"
                     disabled={scanning}
@@ -145,6 +174,15 @@ export default function Dashboard() {
                     {scanning ? <Loader2 className="animate-spin" size={16} /> : "Tara"}
                 </Button>
             </form>
+
+            <BarcodeScanner
+                open={cameraOpen}
+                onClose={() => setCameraOpen(false)}
+                onDetected={(code) => {
+                    setCameraOpen(false);
+                    runScanWith(code);
+                }}
+            />
 
             {/* Scan result */}
             {scanResult && (

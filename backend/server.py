@@ -375,6 +375,65 @@ async def critical_stock(user: dict = Depends(require_workspace)):
             })
     return result[:5]
 
+@api_router.post("/inventory/csv")
+async def upload_inventory_csv(file: UploadFile = File(...), user: dict = Depends(require_workspace)):
+    """Bulk upsert inventory from CSV. Expected headers: gtin, current_stock, min_threshold, max_threshold"""
+    try:
+        content = await file.read()
+        text = content.decode("utf-8-sig", errors="ignore")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Dosya okunamadı")
+    reader = csv.DictReader(io.StringIO(text))
+    # Strip BOM and whitespace from fieldnames
+    if not reader.fieldnames or "gtin" not in [h.strip().lower().lstrip('\ufeff') for h in reader.fieldnames]:
+        raise HTTPException(status_code=400, detail="CSV başlığı 'gtin' sütunu içermelidir")
+    updated = 0
+    created = 0
+    not_found: list[str] = []
+    for row in reader:
+        row = {(k or "").strip().lower().lstrip('\ufeff'): (v or "").strip() for k, v in row.items()}
+        gtin = row.get("gtin")
+        if not gtin:
+            continue
+        product = await db.products.find_one({"workspace_id": user["workspace_id"], "gtin": gtin})
+        if not product:
+            not_found.append(gtin)
+            continue
+        inv = await db.inventory.find_one({"product_id": product["id"]})
+        upd: dict = {}
+        for key in ("current_stock", "min_threshold", "max_threshold"):
+            if row.get(key):
+                try:
+                    upd[key] = int(row[key])
+                except ValueError:
+                    pass
+        if not upd:
+            continue
+        upd["last_counted_at"] = datetime.now(timezone.utc).isoformat()
+        if inv:
+            await db.inventory.update_one({"id": inv["id"]}, {"$set": upd})
+            await db.inventory_logs.insert_one({
+                "id": str(uuid.uuid4()),
+                "inventory_id": inv["id"],
+                "change": upd,
+                "reason": "csv_upload",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_by": user["id"],
+            })
+            updated += 1
+        else:
+            await db.inventory.insert_one({
+                "id": str(uuid.uuid4()),
+                "product_id": product["id"],
+                "workspace_id": user["workspace_id"],
+                "current_stock": upd.get("current_stock", 0),
+                "min_threshold": upd.get("min_threshold", 5),
+                "max_threshold": upd.get("max_threshold", 50),
+                "last_counted_at": upd["last_counted_at"],
+            })
+            created += 1
+    return {"updated": updated, "created": created, "not_found": not_found}
+
 # =========================================================
 # SUPPLIERS & PRICES
 # =========================================================

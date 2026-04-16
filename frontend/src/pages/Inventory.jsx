@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -10,8 +10,16 @@ import {
     SheetTitle,
     SheetDescription,
 } from "../components/ui/sheet";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "../components/ui/dialog";
 import { StockChip, CategoryPill } from "../components/shared/StatusBadge";
-import { Pencil, AlertTriangle, Boxes, Upload } from "lucide-react";
+import { Pencil, AlertTriangle, Boxes, Upload, FileDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 const TABS = [
@@ -26,6 +34,10 @@ export default function Inventory() {
     const [tab, setTab] = useState("all");
     const [editing, setEditing] = useState(null);
     const [form, setForm] = useState({});
+    const [csvOpen, setCsvOpen] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [csvResult, setCsvResult] = useState(null);
+    const fileRef = useRef(null);
 
     const load = async () => {
         setLoading(true);
@@ -67,6 +79,41 @@ export default function Inventory() {
         }
     };
 
+    const downloadTemplate = () => {
+        const csv =
+            "gtin,current_stock,min_threshold,max_threshold\n" +
+            "8690123456001,20,5,30\n" +
+            "8690123456002,15,5,30\n";
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "depozio-stok-sablon.csv";
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const uploadCsv = async (file) => {
+        if (!file) return;
+        setUploading(true);
+        setCsvResult(null);
+        try {
+            const form = new FormData();
+            form.append("file", file);
+            const { data } = await api.post("/inventory/csv", form, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+            setCsvResult(data);
+            toast.success(`${data.updated + data.created} satır işlendi`);
+            load();
+        } catch (e) {
+            toast.error(e.response?.data?.detail || "CSV yüklenemedi");
+        } finally {
+            setUploading(false);
+            if (fileRef.current) fileRef.current.value = "";
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex items-start justify-between flex-wrap gap-4">
@@ -85,7 +132,7 @@ export default function Inventory() {
                     data-testid="inventory-csv-btn"
                     variant="outline"
                     className="rounded-xl border-slate-200"
-                    onClick={() => toast.info("CSV yükleme yakında — placeholder")}
+                    onClick={() => setCsvOpen(true)}
                 >
                     <Upload size={16} className="mr-2" />
                     CSV ile yükle
@@ -248,6 +295,74 @@ export default function Inventory() {
                     )}
                 </SheetContent>
             </Sheet>
+
+            <Dialog open={csvOpen} onOpenChange={(v) => { setCsvOpen(v); if (!v) setCsvResult(null); }}>
+                <DialogContent className="rounded-2xl max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="font-display">CSV ile toplu stok yükleme</DialogTitle>
+                        <DialogDescription>
+                            Başlıklar: <code className="text-xs bg-slate-100 px-1 rounded">gtin, current_stock, min_threshold, max_threshold</code>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-2">
+                        <button
+                            type="button"
+                            onClick={downloadTemplate}
+                            data-testid="csv-template-btn"
+                            className="w-full flex items-center gap-2 text-sm text-[#14553b] hover:underline font-medium"
+                        >
+                            <FileDown size={14} /> Örnek şablonu indir
+                        </button>
+                        <label
+                            htmlFor="csv-upload-input"
+                            className="block rounded-xl border-2 border-dashed border-slate-300 hover:border-[#1a6b4a] bg-slate-50 hover:bg-[#1a6b4a]/5 p-8 text-center cursor-pointer transition-colors"
+                        >
+                            {uploading ? (
+                                <div className="flex flex-col items-center gap-2">
+                                    <Loader2 className="animate-spin text-[#1a6b4a]" size={24} />
+                                    <div className="text-sm text-slate-600">Yükleniyor...</div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center gap-2">
+                                    <Upload className="text-[#1a6b4a]" size={24} />
+                                    <div className="text-sm font-medium text-slate-900">Dosya seç</div>
+                                    <div className="text-xs text-slate-500">.csv · UTF-8</div>
+                                </div>
+                            )}
+                        </label>
+                        <input
+                            ref={fileRef}
+                            id="csv-upload-input"
+                            data-testid="csv-upload-input"
+                            type="file"
+                            accept=".csv,text/csv"
+                            className="hidden"
+                            onChange={(e) => uploadCsv(e.target.files?.[0])}
+                        />
+
+                        {csvResult && (
+                            <div className="rounded-xl bg-[#1a6b4a]/5 border border-[#1a6b4a]/15 p-4 text-sm space-y-1">
+                                <div className="font-semibold text-slate-900">Sonuç</div>
+                                <div className="text-slate-700">
+                                    Güncellenen: <span className="font-semibold">{csvResult.updated}</span> ·
+                                    Oluşturulan: <span className="font-semibold">{csvResult.created}</span>
+                                </div>
+                                {csvResult.not_found?.length > 0 && (
+                                    <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 mt-2">
+                                        Kataloğda bulunmayan {csvResult.not_found.length} barkod atlandı
+                                        {csvResult.not_found.length <= 5 && `: ${csvResult.not_found.join(", ")}`}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setCsvOpen(false)} className="rounded-xl">
+                            Kapat
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
