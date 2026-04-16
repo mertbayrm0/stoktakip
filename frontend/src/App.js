@@ -9,7 +9,10 @@ import Dashboard from "./pages/Dashboard";
 import Catalog from "./pages/Catalog";
 import Inventory from "./pages/Inventory";
 import Orders from "./pages/Orders";
-import ComingSoon from "./pages/ComingSoon";
+import Suppliers from "./pages/Suppliers";
+import Reports from "./pages/Reports";
+import Discount from "./pages/Discount";
+import Integrations from "./pages/Integrations";
 import { Toaster } from "./components/ui/sonner";
 
 function App() {
@@ -27,42 +30,10 @@ function App() {
                             <Route path="/katalog" element={<Catalog />} />
                             <Route path="/stok" element={<Inventory />} />
                             <Route path="/siparis" element={<Orders />} />
-                            <Route
-                                path="/iskonto"
-                                element={
-                                    <ComingSoon
-                                        title="İskonto hesabı"
-                                        description="Tedarikçi ciro kırılımlarına göre iskonto hesaplaması — sonraki iterasyonda."
-                                    />
-                                }
-                            />
-                            <Route
-                                path="/raporlar"
-                                element={
-                                    <ComingSoon
-                                        title="Raporlar"
-                                        description="Aylık tasarruf grafiği, kategori dağılımı ve CSV export — sonraki iterasyonda."
-                                    />
-                                }
-                            />
-                            <Route
-                                path="/tedarikci"
-                                element={
-                                    <ComingSoon
-                                        title="Tedarikçiler"
-                                        description="Tedarikçi CRUD ve fiyat listesi yükleme — sonraki iterasyonda."
-                                    />
-                                }
-                            />
-                            <Route
-                                path="/entegrasyon"
-                                element={
-                                    <ComingSoon
-                                        title="Entegrasyonlar"
-                                        description="Eczanem, GS1, BulutVet, WhatsApp Business, Trendyol/HB scraper — sonraki aşama."
-                                    />
-                                }
-                            />
+                            <Route path="/iskonto" element={<Discount />} />
+                            <Route path="/raporlar" element={<Reports />} />
+                            <Route path="/tedarikci" element={<Suppliers />} />
+                            <Route path="/entegrasyon" element={<Integrations />} />
                         </Route>
 
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />

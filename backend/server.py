@@ -461,6 +461,197 @@ async def prices_by_product(product_id: str, user: dict = Depends(require_worksp
     prices.sort(key=lambda x: x["unit_price"])
     return prices
 
+class SupplierPatch(BaseModel):
+    name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    order_method: Optional[Literal["email", "whatsapp", "manual"]] = None
+    is_active: Optional[bool] = None
+
+@api_router.patch("/suppliers/{supplier_id}")
+async def update_supplier(supplier_id: str, body: SupplierPatch, user: dict = Depends(require_workspace)):
+    sup = await db.suppliers.find_one({"id": supplier_id, "workspace_id": user["workspace_id"]})
+    if not sup:
+        raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if updates:
+        await db.suppliers.update_one({"id": supplier_id}, {"$set": updates})
+    return await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
+
+@api_router.delete("/suppliers/{supplier_id}")
+async def delete_supplier(supplier_id: str, user: dict = Depends(require_admin)):
+    res = await db.suppliers.delete_one({"id": supplier_id, "workspace_id": user["workspace_id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
+    await db.supplier_prices.delete_many({"supplier_id": supplier_id})
+    return {"ok": True}
+
+@api_router.post("/supplier-prices/csv")
+async def upload_supplier_prices_csv(supplier_id: str, file: UploadFile = File(...), user: dict = Depends(require_workspace)):
+    """Bulk upsert supplier prices. CSV headers: gtin, unit_price, stock_available"""
+    sup = await db.suppliers.find_one({"id": supplier_id, "workspace_id": user["workspace_id"]})
+    if not sup:
+        raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı")
+    content = await file.read()
+    text = content.decode("utf-8-sig", errors="ignore").lstrip("\ufeff")
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames or "gtin" not in [h.strip().lower().lstrip("\ufeff") for h in reader.fieldnames]:
+        raise HTTPException(status_code=400, detail="CSV başlığı 'gtin' sütunu içermelidir")
+    upserted = 0
+    not_found: list[str] = []
+    for row in reader:
+        row = {(k or "").strip().lower().lstrip("\ufeff"): (v or "").strip() for k, v in row.items()}
+        gtin = row.get("gtin")
+        if not gtin:
+            continue
+        product = await db.products.find_one({"workspace_id": user["workspace_id"], "gtin": gtin})
+        if not product:
+            not_found.append(gtin)
+            continue
+        try:
+            unit_price = float(row.get("unit_price", "0").replace(",", "."))
+        except ValueError:
+            continue
+        try:
+            stock_available = int(row.get("stock_available", "0"))
+        except ValueError:
+            stock_available = 0
+        existing = await db.supplier_prices.find_one({"supplier_id": supplier_id, "product_id": product["id"]})
+        if existing:
+            await db.supplier_prices.update_one(
+                {"id": existing["id"]},
+                {"$set": {"unit_price": unit_price, "stock_available": stock_available,
+                          "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+        else:
+            await db.supplier_prices.insert_one({
+                "id": str(uuid.uuid4()),
+                "supplier_id": supplier_id,
+                "product_id": product["id"],
+                "unit_price": unit_price,
+                "stock_available": stock_available,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
+        upserted += 1
+    await db.suppliers.update_one({"id": supplier_id}, {"$set": {"price_list_updated_at": datetime.now(timezone.utc).isoformat()}})
+    return {"upserted": upserted, "not_found": not_found}
+
+# =========================================================
+# DISCOUNT RULES
+# =========================================================
+class DiscountRuleIn(BaseModel):
+    supplier_id: str
+    min_amount: float = 0.0
+    max_amount: Optional[float] = None
+    discount_pct: float = Field(ge=0, le=100)
+
+@api_router.get("/discount-rules")
+async def list_discount_rules(user: dict = Depends(require_workspace)):
+    rules = await db.discount_rules.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).sort("supplier_id", 1).to_list(500)
+    return rules
+
+@api_router.post("/discount-rules")
+async def create_discount_rule(body: DiscountRuleIn, user: dict = Depends(require_admin)):
+    rid = str(uuid.uuid4())
+    doc = {"id": rid, "workspace_id": user["workspace_id"], **body.model_dump(),
+           "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.discount_rules.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.delete("/discount-rules/{rule_id}")
+async def delete_discount_rule(rule_id: str, user: dict = Depends(require_admin)):
+    res = await db.discount_rules.delete_one({"id": rule_id, "workspace_id": user["workspace_id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Kural bulunamadı")
+    return {"ok": True}
+
+# =========================================================
+# REPORTS
+# =========================================================
+@api_router.get("/reports/monthly-savings")
+async def monthly_savings(user: dict = Depends(require_workspace)):
+    """Return last 6 months of total_amount + total_saving aggregated by month."""
+    now = datetime.now(timezone.utc)
+    buckets: list[dict] = []
+    # go back 5 months (6 buckets including current)
+    for i in range(5, -1, -1):
+        year = now.year
+        month = now.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+        start = datetime(year, month, 1, tzinfo=timezone.utc)
+        if month == 12:
+            end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            end = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+        orders_in_month = await db.orders.find({
+            "workspace_id": user["workspace_id"],
+            "created_at": {"$gte": start.isoformat(), "$lt": end.isoformat()},
+        }, {"_id": 0}).to_list(1000)
+        total_amount = round(sum(o.get("total_amount", 0) for o in orders_in_month), 2)
+        total_saving = round(sum(o.get("total_saving", 0) for o in orders_in_month), 2)
+        buckets.append({
+            "month": start.strftime("%Y-%m"),
+            "label": start.strftime("%b"),
+            "total_amount": total_amount,
+            "total_saving": total_saving,
+            "order_count": len(orders_in_month),
+        })
+    return buckets
+
+@api_router.get("/reports/category-distribution")
+async def category_distribution(user: dict = Depends(require_workspace)):
+    """Return order_items count + amount grouped by product category."""
+    orders = await db.orders.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).to_list(2000)
+    order_ids = [o["id"] for o in orders]
+    if not order_ids:
+        return []
+    items = await db.order_items.find({"order_id": {"$in": order_ids}}, {"_id": 0}).to_list(5000)
+    agg: dict = {}
+    for it in items:
+        p = await db.products.find_one({"id": it["product_id"]}, {"_id": 0})
+        cat = (p or {}).get("category") or "other"
+        amt = it["qty"] * it["unit_price"]
+        if cat not in agg:
+            agg[cat] = {"category": cat, "qty": 0, "amount": 0.0}
+        agg[cat]["qty"] += it["qty"]
+        agg[cat]["amount"] += amt
+    out = sorted(agg.values(), key=lambda x: -x["amount"])
+    total = sum(x["amount"] for x in out) or 1.0
+    for x in out:
+        x["percentage"] = round(100 * x["amount"] / total, 1)
+        x["amount"] = round(x["amount"], 2)
+    return out
+
+@api_router.get("/reports/orders-csv")
+async def export_orders_csv(user: dict = Depends(require_workspace)):
+    from fastapi.responses import StreamingResponse
+    orders = await db.orders.find({"workspace_id": user["workspace_id"]}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    suppliers_index = {s["id"]: s for s in await db.suppliers.find({}, {"_id": 0}).to_list(500)}
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["order_no", "status", "supplier", "created_at", "total_amount", "total_saving", "item_count"])
+    for o in orders:
+        sup = suppliers_index.get(o.get("supplier_id"))
+        items = await db.order_items.count_documents({"order_id": o["id"]})
+        writer.writerow([
+            o.get("order_no", ""),
+            o.get("status", ""),
+            sup["name"] if sup else "",
+            o.get("created_at", ""),
+            o.get("total_amount", 0),
+            o.get("total_saving", 0),
+            items,
+        ])
+    out.seek(0)
+    return StreamingResponse(
+        iter([out.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=depozio-siparisler.csv"},
+    )
+
 # =========================================================
 # ORDERS
 # =========================================================

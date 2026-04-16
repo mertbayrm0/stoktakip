@@ -21,14 +21,13 @@ const mainItems = [
     { to: "/katalog", icon: PackageSearch, label: "Katalog", testId: "nav-catalog" },
     { to: "/stok", icon: Boxes, label: "Stok takibi", testId: "nav-inventory" },
     { to: "/siparis", icon: ClipboardList, label: "Siparişler", testId: "nav-orders" },
+    { to: "/tedarikci", icon: Truck, label: "Tedarikçiler", testId: "nav-suppliers" },
+    { to: "/iskonto", icon: Percent, label: "İskonto hesabı", testId: "nav-discount" },
+    { to: "/raporlar", icon: BarChart3, label: "Raporlar", testId: "nav-reports" },
+    { to: "/entegrasyon", icon: Plug, label: "Entegrasyonlar", testId: "nav-integrations" },
 ];
 
-const placeholders = [
-    { to: "/iskonto", icon: Percent, label: "İskonto hesabı" },
-    { to: "/raporlar", icon: BarChart3, label: "Raporlar" },
-    { to: "/tedarikci", icon: Truck, label: "Tedarikçiler" },
-    { to: "/entegrasyon", icon: Plug, label: "Entegrasyonlar" },
-];
+const placeholders = [];
 
 export default function Sidebar() {
     const { user, workspace, logout } = useAuth();
@@ -70,29 +69,6 @@ export default function Sidebar() {
                     >
                         <it.icon size={18} strokeWidth={2} />
                         <span>{it.label}</span>
-                    </NavLink>
-                ))}
-            </nav>
-
-            <nav className="flex flex-col gap-1">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 px-3 mb-1">
-                    Yakında
-                </div>
-                {placeholders.map((it) => (
-                    <NavLink
-                        key={it.to}
-                        to={it.to}
-                        className={({ isActive }) =>
-                            `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                                isActive ? active : "text-slate-400 hover:bg-slate-50"
-                            }`
-                        }
-                    >
-                        <it.icon size={18} strokeWidth={2} />
-                        <span>{it.label}</span>
-                        <span className="ml-auto text-[10px] uppercase tracking-wider bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">
-                            Taslak
-                        </span>
                     </NavLink>
                 ))}
             </nav>
