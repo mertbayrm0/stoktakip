@@ -1,0 +1,118 @@
+{
+  "project_name": "Depozio",
+  "domain": "B2B SaaS / Pharmacy & Veterinary",
+  "theme": "Light",
+  "archetype": "1 (Organic & Earthy)",
+  "language": "Turkish",
+  "design_philosophy": "Healthy, trustworthy, and modern SaaS. Distinctive from generic white AI-slop SaaS. Focus on operational clarity, F-pattern data scanning, and tactile neumorphic touches without heaviness.",
+  "colors": {
+    "primary": "#1a6b4a",
+    "primary_hover": "#14553b",
+    "primary_light": "rgba(26, 107, 74, 0.1)",
+    "background": "#F9FAF9",
+    "surface": "#FFFFFF",
+    "surface_muted": "#F1F5F3",
+    "text_primary": "#0F172A",
+    "text_secondary": "#64748B",
+    "text_tertiary": "#94A3B8",
+    "border": "#E2E8F0",
+    "border_subtle": "rgba(26, 107, 74, 0.08)",
+    "status": {
+      "success": { "bg": "#D1FAE5", "text": "#065F46", "border": "#A7F3D0" },
+      "warning": { "bg": "#FEF3C7", "text": "#92400E", "border": "#FDE68A" },
+      "danger": { "bg": "#FEE2E2", "text": "#991B1B", "border": "#FECACA" },
+      "info": { "bg": "#DBEAFE", "text": "#1E40AF", "border": "#BFDBFE" }
+    }
+  },
+  "typography": {
+    "headings": {
+      "font_family": "\"Cabinet Grotesk\", sans-serif",
+      "weights": ["500", "700", "800"],
+      "letter_spacing": "tracking-tight"
+    },
+    "body": {
+      "font_family": "\"Satoshi\", sans-serif",
+      "weights": ["400", "500", "600"],
+      "letter_spacing": "tracking-normal"
+    },
+    "scale": {
+      "h1": "text-4xl md:text-5xl font-bold tracking-tight text-slate-900",
+      "h2": "text-2xl md:text-3xl font-bold tracking-tight text-slate-900",
+      "h3": "text-xl font-semibold text-slate-900",
+      "h4": "text-lg font-medium text-slate-800",
+      "body": "text-base text-slate-600",
+      "small": "text-sm text-slate-500",
+      "tiny": "text-xs font-medium uppercase tracking-wider text-slate-400"
+    }
+  },
+  "spacing_and_layout": {
+    "sidebar": {
+      "width": "w-64",
+      "background": "bg-[#F9FAF9]",
+      "border": "border-r border-slate-200/60"
+    },
+    "main_content": {
+      "padding": "p-6 md:p-8 md:pl-72"
+    },
+    "cards": {
+      "padding": "p-6",
+      "border_radius": "rounded-2xl",
+      "shadow": "shadow-[0_2px_8px_rgba(26,107,74,0.04)]",
+      "border": "border border-slate-200/60"
+    },
+    "buttons": {
+      "border_radius": "rounded-xl",
+      "padding": "px-4 py-2"
+    }
+  },
+  "components": {
+    "scan_bar": "Hero-like prominence at the top of the dashboard. Full width, large input field, clean icon. Focus state should ring with primary color.",
+    "stat_cards": "4 grid layout. Use subtle icons. Number should be prominent (Cabinet Grotesk).",
+    "tables": "Clean, border-bottom only for rows. Use badge components for status. Right-align numeric/price columns. Hover state on rows.",
+    "badges": "Soft background, solid text. Fully rounded (rounded-full).",
+    "tabs": "Inline tabs. Active state uses border-bottom with primary color, or soft pill background.",
+    "drawers": "Slide-in from right. Must have a backdrop blur (backdrop-blur-sm bg-slate-900/20). Keep header fixed, scrollable content.",
+    "empty_states": "Use subtle blob backgrounds or soft grey circles behind a Lucide icon. Clear heading, muted description text, and a primary CTA button."
+  },
+  "interactions": {
+    "hover": "Subtle translate-y-[-2px] and elevated shadow for cards. Buttons must explicitly set text color on hover.",
+    "focus": "focus:ring-2 focus:ring-[#1a6b4a]/30 focus:outline-none",
+    "testing": "All interactive elements MUST have `data-testid` (e.g., `data-testid=\"login-submit-button\"`)"
+  },
+  "media_urls": {
+    "auth_background": {
+      "url": "https://images.unsplash.com/photo-1775210727551-42bc213b2c44",
+      "description": "Modern pharmacy interior for Login/Register split screen background"
+    },
+    "avatar": {
+      "url": "https://images.unsplash.com/photo-1612531385446-f7e6d131e1d0",
+      "description": "Doctor/Pharmacist profile avatar placeholder"
+    },
+    "products": [
+      {
+        "url": "https://images.unsplash.com/photo-1763668444855-401b58dceb20",
+        "description": "Clear bottle with white capsules"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1763668177859-0ed5669a795e",
+        "description": "Amber bottle with white label"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1762328500413-1a4cb2023059",
+        "description": "Opened bottle of beige pills"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1763668331599-487470fb85b2",
+        "description": "Clear bottle filled with capsules"
+      }
+    ]
+  },
+  "specific_instructions_for_main_agent": [
+    "Language: ENTIRE UI must be in Turkish.",
+    "Icons: Use lucide-react strictly. No emojis.",
+    "Bento Grid on Dashboard: Use 1 full width for Scan Bar, 4 cols for stats, and split remaining space for Critical Stock Widget and Recent Orders Widget.",
+    "Auth Flow: Implement a beautiful split-screen layout for Login/Register with the auth_background image taking up half the screen. Add an overlay (bg-[#1a6b4a]/20) to the image for brand feel.",
+    "Sidebar: Must include active states using the primary_light background. Include Dashboard, Katalog, Stok, Siparişler. Also include disabled placeholders for İskonto, Raporlar, Tedarikçiler, Entegrasyonlar.",
+    "Shadcn Components: Heavily customize them to match the border radii (rounded-xl/2xl) and the organic soft shadow style. Do not leave default Vercel-like sharp edges."
+  ]
+}
